@@ -125,6 +125,9 @@ impl Path {
 
             let mut threads: Vec<_> = seed.collect();
 
+            // Ensure at least one thread is active, otherwise toggle a yielded
+            // thread.
+
             let active = threads.iter().any(|th| *th == Thread::Active);
 
             if !active {
@@ -132,9 +135,6 @@ impl Path {
                     .find(|th| **th == Thread::Yield)
                     .map(|th| *th = Thread::Active);
             }
-
-            // Ensure at least one thread is active, otherwise toggle a yielded
-            // thread.
 
             self.schedules.push(Schedule {
                 threads,
@@ -152,6 +152,10 @@ impl Path {
 
         let threads = &mut self.schedules[i].threads;
 
+        // NOTE(twk): so apprently this just takes the first thread that is active.
+        // If we randomise here, and deactivate the BPOR stuff completely(?) we have a
+        // basic random scheduler. Probably makes sense to this on the outer layer though:
+        // basically replace `execution.schedule()` (or make its behaviour configurable)
         threads.iter_mut()
             .enumerate()
             .find(|&(_, ref th)| th.is_active())
