@@ -1,4 +1,11 @@
+<<<<<<< HEAD
 use crate::rt::{self, thread, Synchronize, VersionVec};
+||||||| merged common ancestors
+use rt::{self, thread, Synchronize, VersionVec};
+=======
+use rt::arena::Arena;
+use rt::{self, thread, Synchronize, VersionVec};
+>>>>>>> Introduced mostly arena-backed `VersionVec` implementation.
 
 use std::sync::atomic::Ordering;
 
@@ -23,9 +30,9 @@ struct Store {
 struct FirstSeen(Vec<Option<usize>>);
 
 impl History {
-    pub fn init(&mut self, threads: &mut thread::Set) {
+    pub fn init(&mut self, arena: &mut Arena, threads: &mut thread::Set) {
         self.stores.push(Store {
-            sync: Synchronize::new(threads.max()),
+            sync: Synchronize::new(arena, threads.max()),
             first_seen: FirstSeen::new(threads),
             seq_cst: false,
         });
@@ -52,9 +59,9 @@ impl History {
         index
     }
 
-    pub fn store(&mut self, threads: &mut thread::Set, order: Ordering) {
+    pub fn store(&mut self, arena: &mut Arena, threads: &mut thread::Set, order: Ordering) {
         let mut store = Store {
-            sync: Synchronize::new(threads.max()),
+            sync: Synchronize::new(arena, threads.max()),
             first_seen: FirstSeen::new(threads),
             seq_cst: is_seq_cst(order),
         };
