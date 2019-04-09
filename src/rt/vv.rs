@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::cmp;
 use std::ops;
 
+#[cfg(feature = "checkpoint")]
 use serde::{Deserialize, Deserializer};
 
 #[derive(Clone, Debug, PartialOrd, Eq, PartialEq)]
