@@ -40,17 +40,6 @@ impl VersionVec {
         VersionVec::Perm(vec![0; max_threads].into_boxed_slice())
     }
 
-    pub fn clear(&mut self) {
-        match self {
-            VersionVec::Arena(_) => panic!("clearing arena allocated VersionVec"),
-            VersionVec::Perm(ref mut v) => {
-                for r in v.iter_mut() {
-                    *r = 0;
-                }
-            },
-        }
-    }
-
     pub fn as_slice(&self) -> &[usize] {
         match self {
             VersionVec::Arena(v) => &v,

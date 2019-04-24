@@ -439,6 +439,10 @@ impl<T> SliceVec<T> {
         }
     }
 
+    pub fn capacity(&self) -> usize {
+        self.capacity
+    }
+
     pub fn iter(&self) -> SliceIter<T> {
         self.slice.iter()
     }

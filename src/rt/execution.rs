@@ -3,6 +3,7 @@ use crate::rt::object;
 use crate::rt::thread;
 use crate::rt::Path;
 
+use std::mem;
 use std::fmt;
 
 pub struct Execution {
@@ -83,24 +84,24 @@ impl Execution {
         let max_history = self.max_history;
         let log = self.log;
         let mut path = self.path;
-        let mut objects = self.objects;
 
-        let mut threads = self.threads;
+        // drop the old object and thread sets
+        mem::drop(self.objects);
+        mem::drop(self.threads);
 
-        objects.clear();
-        threads.clear();
         Arena::tls_clear();
 
         if !path.step() {
             return None;
         }
 
+        let mut threads = thread::Set::new(max_threads);
         threads.init();
 
         Some(Execution {
             path,
             threads,
-            objects,
+            objects: object::Set::new(),
             max_threads,
             max_history,
             log,

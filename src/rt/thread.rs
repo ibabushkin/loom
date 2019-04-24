@@ -1,3 +1,4 @@
+use crate::rt::arena::SliceVec;
 use crate::rt::object::Operation;
 use crate::rt::vv::VersionVec;
 
@@ -33,7 +34,7 @@ pub struct Thread {
 
 #[derive(Debug)]
 pub struct Set {
-    threads: Vec<Thread>,
+    threads: SliceVec<Thread>,
 
     /// Currently scheduled thread.
     ///
@@ -125,7 +126,7 @@ impl Set {
     /// The set may contain up to `max_threads` threads.
     pub fn new(max_threads: usize) -> Set {
         Set {
-            threads: Vec::with_capacity(max_threads),
+            threads: SliceVec::new(max_threads),
             active: None,
             seq_cst_causality: VersionVec::new_perm(max_threads),
         }
@@ -206,12 +207,6 @@ impl Set {
             .join(&self.seq_cst_causality);
         self.seq_cst_causality
             .join(&self.threads[self.active.unwrap()].causality);
-    }
-
-    pub fn clear(&mut self) {
-        self.threads.clear();
-        self.active = None;
-        self.seq_cst_causality.clear();
     }
 
     pub fn init(&mut self) {

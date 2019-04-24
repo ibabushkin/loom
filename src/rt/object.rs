@@ -1,6 +1,7 @@
+use crate::rt::arena::SliceVec;
 use crate::rt::atomic;
-use crate::rt::vv::VersionVec;
 use crate::rt::Execution;
+use crate::rt::vv::VersionVec;
 
 use std::marker::PhantomData;
 use std::ops;
@@ -14,7 +15,7 @@ pub struct Object {
 
 #[derive(Debug)]
 pub struct Set {
-    objects: Vec<Object>,
+    objects: SliceVec<Object>,
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -99,7 +100,7 @@ impl Object {
 
 impl Set {
     pub fn new() -> Set {
-        Set { objects: vec![] }
+        Set { objects: SliceVec::new(0) }
     }
 
     pub fn insert(&mut self, object: Object) -> Id {
@@ -145,10 +146,6 @@ impl Set {
             Kind::Condvar(ref mut obj) => *obj = Some(access),
             Kind::Thread(ref mut obj) => *obj = Some(access),
         }
-    }
-
-    pub fn clear(&mut self) {
-        self.objects.clear();
     }
 }
 
