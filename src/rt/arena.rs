@@ -1,6 +1,6 @@
 #![allow(warnings)]
 
-use std::alloc::Layout;
+use std::alloc::{dealloc, Layout};
 use std::cell::Cell;
 use std::cmp;
 use std::fmt;
@@ -12,7 +12,7 @@ use std::rc::Rc;
 use std::slice;
 
 #[cfg(feature = "checkpoint")]
-use serde::{Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 // We are running in a single thread in any viable situation anyway, so storing the
 // arena in a thread-local variable should be viable. However, since we want to control
@@ -350,6 +350,31 @@ where
         S: Serializer,
     {
         serializer.collect_seq(self.iter())
+    }
+}
+
+#[cfg(feature = "checkpoint")]
+impl<T> Deserialize for Slice<T>
+where
+    T: Deserialize,
+{
+    #[inline]
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer,
+    {
+        let mut res: Vec<T> = Deserialize::deserialize(deserializer)?;
+        let mut slice = Slice::new(res.len());
+
+        unsafe {
+            let ptr = res.as_mut_ptr();
+            ptr::copy_nonoverlapping(slice.ptr, ptr, slice.len);
+            dealloc(ptr);
+        }
+
+        mem::forget(res);
+
+        slice
     }
 }
 
