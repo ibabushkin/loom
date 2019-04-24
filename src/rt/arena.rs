@@ -4,6 +4,7 @@ use std::alloc::{dealloc, Layout};
 use std::cell::Cell;
 use std::cmp;
 use std::fmt;
+use std::iter::FromIterator;
 use std::marker;
 use std::mem;
 use std::ops::{Deref, DerefMut};
@@ -70,9 +71,18 @@ pub struct SliceVec<T> {
 }
 
 /// An iterator over a sequence of arena-allocated objects
+#[derive(Debug)]
 pub struct SliceIter<'a, T: 'a> {
     ptr: *const T,
     end: *const T,
+    _marker: marker::PhantomData<&'a T>,
+}
+
+/// An iterator over a mutable sequence of arena-allocated objects
+#[derive(Debug)]
+pub struct SliceIterMut<'a, T: 'a> {
+    ptr: *mut T,
+    end: *mut T,
     _marker: marker::PhantomData<&'a T>,
 }
 
@@ -277,6 +287,20 @@ impl<T> Slice<T> {
             }
         }
     }
+
+    pub fn iter_mut(&mut self) -> SliceIterMut<T> {
+        unsafe {
+            // no ZST support
+            let ptr = self.ptr;
+            let end = self.ptr.add(self.len);
+
+            SliceIterMut {
+                ptr,
+                end,
+                _marker: marker::PhantomData,
+            }
+        }
+    }
 }
 
 impl<T: Clone> Clone for Slice<T> {
@@ -378,6 +402,24 @@ where
     }
 }
 
+impl<'a, T> IntoIterator for &'a Slice<T> {
+    type Item = &'a T;
+    type IntoIter = SliceIter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<'a, T> IntoIterator for &'a mut Slice<T> {
+    type Item = &'a mut T;
+    type IntoIter = SliceIterMut<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
+    }
+}
+
 impl<T> SliceVec<T> {
     pub fn new(capacity: usize) -> Self {
         let inner: InnerRef = Arena::tls_inner_ref();
@@ -401,6 +443,10 @@ impl<T> SliceVec<T> {
         self.slice.iter()
     }
 
+    pub fn iter_mut(&mut self) -> SliceIterMut<T> {
+        self.slice.iter_mut()
+    }
+
     pub fn reserve(&mut self, size: usize) {
         let lead: usize =
             ((size / self.capacity) as usize +
@@ -417,7 +463,7 @@ impl<T> SliceVec<T> {
         }
 
         self.slice.ptr = ptr;
-        self.capacity *= 2;
+        self.capacity = new_capacity;
     }
 
     pub fn push(&mut self, elem: T) {
@@ -447,7 +493,7 @@ impl<T> SliceVec<T> {
         T: Clone,
     {
         if self.capacity < len {
-            
+            self.reserve(len);
         }
 
         for i in self.slice.len .. (len - 1) {
@@ -461,11 +507,16 @@ impl<T> SliceVec<T> {
                 ptr::write(self.slice.ptr.offset(len as isize - 1), value);
             }
         }
+
+        self.slice.len = len;
+    }
+
+    pub fn clear(&mut self) {
+        self.slice.len = 0;
     }
 }
 
 impl<T: Clone> Clone for SliceVec<T> {
-    // TODO: just use thread local
     fn clone(&self) -> Self {
         let ptr: *mut T = self.slice._inner.allocate(self.capacity);
 
@@ -534,12 +585,48 @@ where
     }
 }
 
+impl<T> FromIterator<T> for SliceVec<T> {
+    fn from_iter<I>(iter: I) -> Self
+    where
+        I: IntoIterator<Item=T>
+    {
+        let iter = iter.into_iter();
+        let (min, max) = iter.size_hint();
+        let cap = if let Some(m) = max { m } else { min };
+
+        let mut res = SliceVec::new(cap);
+
+        for e in iter {
+            res.push(e);
+        }
+
+        res
+    }
+}
+
+impl<'a, T> IntoIterator for &'a SliceVec<T> {
+    type Item = &'a T;
+    type IntoIter = SliceIter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<'a, T> IntoIterator for &'a mut SliceVec<T> {
+    type Item = &'a mut T;
+    type IntoIter = SliceIterMut<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
+    }
+}
 
 impl<'a, T> Iterator for SliceIter<'a, T> {
     type Item = &'a T;
 
     #[inline]
-    fn next(&mut self) -> Option<&'a T> {
+    fn next(&mut self) -> Option<Self::Item> {
         if self.ptr == self.end {
             None
         } else {
@@ -550,6 +637,26 @@ impl<'a, T> Iterator for SliceIter<'a, T> {
                 let old = self.ptr;
                 self.ptr = self.ptr.offset(1);
                 Some(&*old)
+            }
+        }
+    }
+}
+
+impl<'a, T> Iterator for SliceIterMut<'a, T> {
+    type Item = &'a mut T;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.ptr == self.end {
+            None
+        } else {
+            unsafe {
+                // FIXME:
+                // we do not support ZSTs right now, the stdlib does some dancing
+                // for this which we can safely avoid for now
+                let old = self.ptr;
+                self.ptr = self.ptr.offset(1);
+                Some(&mut *old)
             }
         }
     }
