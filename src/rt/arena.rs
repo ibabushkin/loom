@@ -468,17 +468,21 @@ impl<T> SliceVec<T> {
 
     pub fn push(&mut self, elem: T) {
         if self.slice.len == self.capacity {
+            let new_capacity = if self.capacity == 0 { 4 } else { self.capacity * 2 };
             let ptr: *mut T =
                 self.slice._inner.allocate_or_extend(self.slice.ptr,
                                                      self.capacity,
-                                                     self.capacity * 2);
+                                                     new_capacity);
 
-            unsafe {
-                ptr::copy_nonoverlapping(self.slice.ptr, ptr, self.slice.len);
+            if self.slice.ptr != ptr {
+                unsafe {
+                    ptr::copy_nonoverlapping(self.slice.ptr, ptr, self.slice.len);
+                }
+
+                self.slice.ptr = ptr;
             }
 
-            self.slice.ptr = ptr;
-            self.capacity *= 2;
+            self.capacity = new_capacity;
         }
 
         unsafe {
