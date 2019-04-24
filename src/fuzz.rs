@@ -1,6 +1,12 @@
 //! Fuzz concurrent programs.
 
-use crate::rt::{self, Execution, Scheduler};
+use crate::rt::{
+    self,
+    arena::{Arena, ARENA},
+    Execution,
+    Scheduler
+};
+
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -145,69 +151,71 @@ impl Builder {
     where
         F: Fn() + Sync + Send + 'static,
     {
-        let mut execution = Execution::new(self.max_threads, self.max_memory, self.max_branches);
-        let mut scheduler = match self.runtime {
-            Runtime::Thread => Scheduler::new_thread(self.max_threads),
+        ARENA.set(&Arena::init_capacity(self.max_memory), || {
+            let mut execution = Execution::new(self.max_threads, self.max_branches);
+            let mut scheduler = match self.runtime {
+                Runtime::Thread => Scheduler::new_thread(self.max_threads),
 
-            #[cfg(feature = "generator")]
-            Runtime::Generator => Scheduler::new_generator(self.max_threads),
+                #[cfg(feature = "generator")]
+                Runtime::Generator => Scheduler::new_generator(self.max_threads),
 
-            #[cfg(feature = "fringe")]
-            Runtime::Fringe => Scheduler::new_fringe(self.max_threads),
-        };
+                #[cfg(feature = "fringe")]
+                Runtime::Fringe => Scheduler::new_fringe(self.max_threads),
+            };
 
-        if let Some(ref path) = self.checkpoint_file {
-            if path.exists() {
-                execution.path = checkpoint::load_execution_path(path);
-            }
-        }
-
-        execution.log = self.log;
-
-        let f = Arc::new(f);
-
-        let mut i = 0;
-
-        let start = Instant::now();
-
-        loop {
-            i += 1;
-
-            if i % self.checkpoint_interval == 0 {
-                println!("");
-                println!(" ================== Iteration {} ==================", i);
-                println!("");
-
-                if let Some(ref path) = self.checkpoint_file {
-                    checkpoint::store_execution_path(&execution.path, path);
+            if let Some(ref path) = self.checkpoint_file {
+                if path.exists() {
+                    execution.path = checkpoint::load_execution_path(path);
                 }
+            }
 
-                if let Some(max_permutations) = self.max_permutations {
-                    if i >= max_permutations {
-                        return;
+            execution.log = self.log;
+
+            let f = Arc::new(f);
+
+            let mut i = 0;
+
+            let start = Instant::now();
+
+            loop {
+                i += 1;
+
+                if i % self.checkpoint_interval == 0 {
+                    println!("");
+                    println!(" ================== Iteration {} ==================", i);
+                    println!("");
+
+                    if let Some(ref path) = self.checkpoint_file {
+                        checkpoint::store_execution_path(&execution.path, path);
+                    }
+
+                    if let Some(max_permutations) = self.max_permutations {
+                        if i >= max_permutations {
+                            return;
+                        }
+                    }
+
+                    if let Some(max_duration) = self.max_duration {
+                        if start.elapsed() >= max_duration {
+                            return;
+                        }
                     }
                 }
 
-                if let Some(max_duration) = self.max_duration {
-                    if start.elapsed() >= max_duration {
-                        return;
-                    }
+                let f = f.clone();
+
+                scheduler.run(&mut execution, move || {
+                    f();
+                    rt::thread_done();
+                });
+
+                if let Some(next) = execution.step() {
+                    execution = next;
+                } else {
+                    return;
                 }
             }
-
-            let f = f.clone();
-
-            scheduler.run(&mut execution, move || {
-                f();
-                rt::thread_done();
-            });
-
-            if let Some(next) = execution.step() {
-                execution = next;
-            } else {
-                return;
-            }
-        }
+        });
     }
 }
 
@@ -216,7 +224,7 @@ pub fn fuzz<F>(f: F)
 where
     F: Fn() + Sync + Send + 'static,
 {
-    Builder::new().fuzz(f)
+    Builder::new().fuzz(f);
 }
 
 impl Default for Runtime {

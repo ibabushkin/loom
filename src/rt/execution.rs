@@ -13,9 +13,6 @@ pub struct Execution {
 
     pub objects: object::Set,
 
-    /// Arena allocator
-    pub arena: Arena,
-
     /// Maximum number of concurrent threads
     pub max_threads: usize,
 
@@ -33,19 +30,17 @@ impl Execution {
     ///
     /// This is only called at the start of a fuzz run. The same instance is
     /// reused across permutations.
-    pub fn new(max_threads: usize, max_memory: usize, max_branches: usize) -> Execution {
-        let mut arena = Arena::with_capacity(max_memory);
+    pub fn new(max_threads: usize, max_branches: usize) -> Execution {
         let mut threads = thread::Set::new(max_threads);
 
         // Create the root thread
-        threads.new_thread(&mut arena);
+        threads.new_thread();
 
         Execution {
             // id: Id::new(),
             path: Path::new(max_branches),
             threads,
             objects: object::Set::new(),
-            arena,
             max_threads,
             max_history: 7,
             log: false,
@@ -54,7 +49,7 @@ impl Execution {
 
     /// Create state to track a new thread
     pub fn new_thread(&mut self) -> thread::Id {
-        let thread_id = self.threads.new_thread(&mut self.arena);
+        let thread_id = self.threads.new_thread();
 
         let (active, new) = self.threads.active2_mut(thread_id);
 
@@ -87,7 +82,6 @@ impl Execution {
         let max_threads = self.max_threads;
         let max_history = self.max_history;
         let log = self.log;
-        let mut arena = self.arena;
         let mut path = self.path;
         let mut objects = self.objects;
 
@@ -95,19 +89,18 @@ impl Execution {
 
         objects.clear();
         threads.clear();
-        arena.clear();
+        Arena::tls_clear();
 
         if !path.step() {
             return None;
         }
 
-        threads.init(&mut arena);
+        threads.init();
 
         Some(Execution {
             path,
             threads,
             objects,
-            arena,
             max_threads,
             max_history,
             log,

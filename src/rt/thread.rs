@@ -1,4 +1,3 @@
-use crate::rt::arena::Arena;
 use crate::rt::object::Operation;
 use crate::rt::vv::VersionVec;
 
@@ -61,14 +60,14 @@ pub enum State {
 }
 
 impl Thread {
-    fn new(arena: &mut Arena, id: Id, max_threads: usize) -> Thread {
+    fn new(id: Id, max_threads: usize) -> Thread {
         Thread {
             id,
             state: State::Runnable,
             critical: false,
             operation: None,
-            causality: VersionVec::new(arena, max_threads),
-            dpor_vv: VersionVec::new(arena, max_threads),
+            causality: VersionVec::new(max_threads),
+            dpor_vv: VersionVec::new(max_threads),
             notified: false,
             last_yield: None,
         }
@@ -133,7 +132,7 @@ impl Set {
     }
 
     /// Create a new thread
-    pub fn new_thread(&mut self, arena: &mut Arena) -> Id {
+    pub fn new_thread(&mut self) -> Id {
         assert!(self.threads.len() < self.max());
 
         // Get the identifier for the thread about to be created
@@ -141,16 +140,7 @@ impl Set {
         let max_threads = self.threads.capacity();
 
         // Push the thread onto the stack
-<<<<<<< HEAD
-        self.threads
-            .push(Thread::new(Id::from_usize(id), max_threads));
-||||||| merged common ancestors
-        self.threads.push(
-            Thread::new(Id::from_usize(id), max_threads));
-=======
-        self.threads.push(
-            Thread::new(arena, Id::from_usize(id), max_threads));
->>>>>>> Introduced mostly arena-backed `VersionVec` implementation.
+        self.threads.push(Thread::new(Id::from_usize(id), max_threads));
 
         if self.active.is_none() {
             self.active = Some(id);
@@ -224,8 +214,8 @@ impl Set {
         self.seq_cst_causality.clear();
     }
 
-    pub fn init(&mut self, arena: &mut Arena) {
-        self.new_thread(arena);
+    pub fn init(&mut self) {
+        self.new_thread();
     }
 
     pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Id, &'a Thread)> + 'a {

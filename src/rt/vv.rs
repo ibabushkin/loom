@@ -1,4 +1,4 @@
-use crate::rt::arena::{Arena, Slice};
+use crate::rt::arena::Slice;
 use crate::rt::thread;
 
 #[cfg(feature = "checkpoint")]
@@ -28,10 +28,10 @@ impl<'de> Deserialize<'de> for VersionVec {
 }
 
 impl VersionVec {
-    pub fn new(arena: &mut Arena, max_threads: usize) -> VersionVec {
+    pub fn new(max_threads: usize) -> VersionVec {
         assert!(max_threads > 0, "max_threads = {:?}", max_threads);
 
-        VersionVec::Arena(arena.slice(max_threads))
+        VersionVec::Arena(Slice::new(max_threads))
     }
 
     pub fn new_perm(max_threads: usize) -> VersionVec {

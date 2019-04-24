@@ -28,7 +28,7 @@ checkpoint = ["serde", "serde_json"]
 
 [dependencies]
 cfg-if = "0.1.6"
-scoped-tls = "0.1.2"
+scoped-tls = "1.0"
 
 # Provides a generator based runtime
 generator = { version = "0.6.10", optional = true }
