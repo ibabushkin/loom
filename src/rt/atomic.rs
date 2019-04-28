@@ -1,10 +1,11 @@
+use crate::rt::arena::SliceVec;
 use crate::rt::{self, thread, Synchronize, VersionVec};
 
 use std::sync::atomic::Ordering;
 
 #[derive(Debug, Default)]
 pub struct History {
-    stores: Vec<Store>,
+    stores: SliceVec<Store>,
 }
 
 #[derive(Debug)]
@@ -20,7 +21,7 @@ struct Store {
 }
 
 #[derive(Debug)]
-struct FirstSeen(Vec<Option<usize>>);
+struct FirstSeen(SliceVec<Option<usize>>);
 
 impl History {
     pub fn init(&mut self, threads: &mut thread::Set) {
@@ -136,7 +137,7 @@ impl History {
 
 impl FirstSeen {
     fn new(threads: &mut thread::Set) -> FirstSeen {
-        let mut first_seen = FirstSeen(vec![]);
+        let mut first_seen = FirstSeen(SliceVec::new(0));
         first_seen.touch(threads);
 
         first_seen
