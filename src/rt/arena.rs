@@ -452,21 +452,27 @@ impl<T> SliceVec<T> {
     }
 
     pub fn reserve(&mut self, size: usize) {
-        let lead: usize =
-            ((size / self.capacity) as usize +
-             (if size % self.capacity == 0 { 0 } else { 1 })).leading_zeros() as usize - 1;
-        let new_capacity = self.capacity * (1 >> (mem::size_of::<usize>() * 8 - lead));
-
-        let ptr: *mut T =
-            self.slice._inner.allocate_or_extend(self.slice.ptr,
-                                                 self.capacity,
-                                                 self.capacity * 2);
-
-        unsafe {
-            ptr::copy_nonoverlapping(self.slice.ptr, ptr, self.slice.len);
+        if self.capacity >= size {
+            return;
         }
 
-        self.slice.ptr = ptr;
+        let mut new_capacity = if self.capacity > 0 { self.capacity } else { 4 };
+
+        while new_capacity < size {
+            new_capacity *= 2;
+        }
+
+        let ptr: *mut T =
+            self.slice._inner.allocate_or_extend(self.slice.ptr, self.capacity, new_capacity);
+
+        if ptr != self.slice.ptr {
+            unsafe {
+                ptr::copy_nonoverlapping(self.slice.ptr, ptr, self.slice.len);
+            }
+
+            self.slice.ptr = ptr;
+        }
+
         self.capacity = new_capacity;
     }
 
@@ -579,6 +585,12 @@ impl<T: PartialOrd> PartialOrd for SliceVec<T> {
     }
 }
 
+impl<T> Default for SliceVec<T> {
+    fn default() -> Self {
+        SliceVec::new(0)
+    }
+}
+
 #[cfg(feature = "checkpoint")]
 impl<T> Serialize for SliceVec<T>
 where
@@ -648,7 +660,37 @@ impl<'a, T> Iterator for SliceIter<'a, T> {
             }
         }
     }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        // let len = unsafe { self.end.offset_from(self.ptr) } as usize;
+        let ptr = self.ptr;
+        let diff = (self.end as usize).wrapping_sub(ptr as usize);
+        let len = diff / mem::size_of::<T>();
+
+        (len, Some(len))
+    }
 }
+
+impl<'a, T> DoubleEndedIterator for SliceIter<'a, T> {
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.ptr == self.end {
+            None
+        } else {
+            unsafe {
+                // FIXME:
+                // we do not support ZSTs right now, the stdlib does some dancing
+                // for this which we can safely avoid for now
+                let old = self.end;
+                self.end = self.end.offset(-1);
+                Some(&*old)
+            }
+        }
+    }
+}
+
+impl<'a, T> ExactSizeIterator for SliceIter<'a, T> { }
 
 impl<'a, T> Iterator for SliceIterMut<'a, T> {
     type Item = &'a mut T;
@@ -668,4 +710,34 @@ impl<'a, T> Iterator for SliceIterMut<'a, T> {
             }
         }
     }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        // let len = unsafe { self.end.offset_from(self.ptr) } as usize;
+        let ptr = self.ptr;
+        let diff = (self.end as usize).wrapping_sub(ptr as usize);
+        let len = diff / mem::size_of::<T>();
+
+        (len, Some(len))
+    }
 }
+
+impl<'a, T> DoubleEndedIterator for SliceIterMut<'a, T> {
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.ptr == self.end {
+            None
+        } else {
+            unsafe {
+                // FIXME:
+                // we do not support ZSTs right now, the stdlib does some dancing
+                // for this which we can safely avoid for now
+                let old = self.end;
+                self.end = self.end.offset(-1);
+                Some(&mut *old)
+            }
+        }
+    }
+}
+
+impl<'a, T> ExactSizeIterator for SliceIterMut<'a, T> { }
