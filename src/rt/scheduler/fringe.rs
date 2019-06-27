@@ -2,6 +2,8 @@ use crate::rt::{thread, Execution, FnBox};
 
 use fringe::{generator::Yielder, Generator, OsStack};
 
+use scoped_tls::scoped_thread_local;
+
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 use std::fmt;
@@ -13,21 +15,21 @@ pub struct Scheduler {
 
     next_thread: usize,
 
-    queued_spawn: VecDeque<Box<FnBox>>,
+    queued_spawn: VecDeque<Box<dyn FnBox>>,
 }
 
-type Thread = Generator<'static, Option<Box<FnBox>>, (), OsStack>;
+type Thread = Generator<'static, Option<Box<dyn FnBox>>, (), OsStack>;
 
 struct State<'a> {
     execution: &'a mut Execution,
-    queued_spawn: &'a mut VecDeque<Box<FnBox>>,
+    queued_spawn: &'a mut VecDeque<Box<dyn FnBox>>,
 }
 
 scoped_thread_local! {
-    static STATE: RefCell<State>
+    static STATE: RefCell<State<'_>>
 }
 
-thread_local!(static YIELDER: Cell<*const Yielder<Option<Box<FnBox>>, ()>> = Cell::new(ptr::null()));
+thread_local!(static YIELDER: Cell<*const Yielder<Option<Box<dyn FnBox>>, ()>> = Cell::new(ptr::null()));
 
 const STACK_SIZE: usize = 1 << 23;
 
@@ -58,7 +60,7 @@ impl Scheduler {
         assert!(suspend().is_none());
     }
 
-    pub fn spawn(f: Box<FnBox>) {
+    pub fn spawn(f: Box<dyn FnBox>) {
         use std::ops::DerefMut;
 
         STATE.with(|state| {
@@ -108,7 +110,7 @@ impl Scheduler {
     }
 }
 
-pub fn suspend() -> Option<Box<FnBox>> {
+pub fn suspend() -> Option<Box<dyn FnBox>> {
     let ptr = YIELDER.with(|cell| {
         let ptr = cell.get();
         cell.set(ptr::null());
@@ -123,7 +125,7 @@ pub fn suspend() -> Option<Box<FnBox>> {
 }
 
 impl fmt::Debug for Scheduler {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt.debug_struct("Scheduler").finish()
     }
 }
@@ -148,7 +150,7 @@ fn spawn_threads(n: usize) -> Vec<Thread> {
                 YIELDER.with(|cell| cell.set(ptr));
 
                 loop {
-                    let f: Option<Box<FnBox>> = suspend();
+                    let f: Option<Box<dyn FnBox>> = suspend();
                     assert!(f.is_some());
                     Scheduler::switch();
                     f.unwrap().call();

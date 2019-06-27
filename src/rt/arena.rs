@@ -1,5 +1,7 @@
 #![allow(warnings)]
 
+use scoped_tls::scoped_thread_local;
+
 use std::alloc::{dealloc, Layout};
 use std::cell::Cell;
 use std::cmp;
@@ -72,7 +74,7 @@ pub struct SliceVec<T> {
 
 /// An iterator over a sequence of arena-allocated objects
 #[derive(Debug)]
-pub struct SliceIter<'a, T: 'a> {
+pub struct SliceIter<'a, T> {
     ptr: *const T,
     end: *const T,
     _marker: marker::PhantomData<&'a T>,
@@ -80,7 +82,7 @@ pub struct SliceIter<'a, T: 'a> {
 
 /// An iterator over a mutable sequence of arena-allocated objects
 #[derive(Debug)]
-pub struct SliceIterMut<'a, T: 'a> {
+pub struct SliceIterMut<'a, T> {
     ptr: *mut T,
     end: *mut T,
     _marker: marker::PhantomData<&'a T>,
@@ -274,7 +276,7 @@ impl<T> Slice<T> {
         }
     }
 
-    pub fn iter(&self) -> SliceIter<T> {
+    pub fn iter<'a>(&'a self) -> SliceIter<'a, T> {
         unsafe {
             // no ZST support
             let ptr = self.ptr;
@@ -288,7 +290,7 @@ impl<T> Slice<T> {
         }
     }
 
-    pub fn iter_mut(&mut self) -> SliceIterMut<T> {
+    pub fn iter_mut<'a>(&'a mut self) -> SliceIterMut<'a, T> {
         unsafe {
             // no ZST support
             let ptr = self.ptr;
@@ -322,7 +324,7 @@ impl<T: Clone> Clone for Slice<T> {
 }
 
 impl<T: fmt::Debug> fmt::Debug for Slice<T> {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.deref().fmt(fmt)
     }
 }
@@ -443,11 +445,11 @@ impl<T> SliceVec<T> {
         self.capacity
     }
 
-    pub fn iter(&self) -> SliceIter<T> {
+    pub fn iter<'a>(&'a self) -> SliceIter<'a, T> {
         self.slice.iter()
     }
 
-    pub fn iter_mut(&mut self) -> SliceIterMut<T> {
+    pub fn iter_mut<'a>(&'a mut self) -> SliceIterMut<'a, T> {
         self.slice.iter_mut()
     }
 
@@ -552,7 +554,7 @@ impl<T: Clone> Clone for SliceVec<T> {
 }
 
 impl<T: fmt::Debug> fmt::Debug for SliceVec<T> {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.slice.fmt(fmt)
     }
 }
